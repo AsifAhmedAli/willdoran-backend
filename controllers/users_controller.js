@@ -700,6 +700,7 @@ passport.use(
                   if (err) {
                     return done(err);
                   }
+                  var useremail = profile.emails[0];
                   const user = {
                     id: result.insertId,
                     name: profile.displayName,
@@ -709,7 +710,7 @@ passport.use(
                   const token = jwt.sign(user, process.env.JWT_SECRET, {
                     expiresIn: "1h",
                   });
-                  return done(null, { token });
+                  return done(null, { token, useremail });
                 }
               );
             } else {
@@ -722,6 +723,7 @@ passport.use(
                   if (err) {
                     return done(err);
                   }
+                  var useremail = profile.emails[0];
                   const user = {
                     id: result.insertId,
                     name: profile.displayName,
@@ -731,7 +733,7 @@ passport.use(
                   const token = jwt.sign(user, process.env.JWT_SECRET, {
                     expiresIn: "1h",
                   });
-                  return done(null, { token });
+                  return done(null, { token, useremail });
                 }
               );
             }
@@ -765,11 +767,24 @@ const googleCallback = (req, res) => {
     if (!user) {
       return res.status(401).json({ error: info.message || "Unauthorized" });
     }
+    // Check if user exists in database
+    var id = "";
+    const selectUserQuery = `SELECT * FROM users WHERE email = ?`;
+    conn.query(selectUserQuery, [user.useremail.value], (err, result) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Internal server error" });
+      }
+      id = result[0].id;
+      res.redirect(
+        `${process.env.clientfrontend}/funccall.html?name=${user.token}&id=${id}`
+      );
+    });
+    // if (result.length === 0) {
+    // console.log(user.useremail.value);
+    // console.log(info);
     // Set token in cookie
     // res.send("token", user.token);
-    res.redirect(
-      `${process.env.clientfrontend}/funccall.html?name=${user.token}`
-    );
   })(req, res);
 };
 
@@ -889,6 +904,7 @@ passport.use(
                   if (err) {
                     return done(err);
                   }
+                  var useremail = profile.emails[0];
                   const user = {
                     id: result.insertId,
                     name: profile.displayName,
@@ -897,11 +913,12 @@ passport.use(
                   const token = jwt.sign(user, process.env.JWT_SECRET, {
                     expiresIn: "1h",
                   });
-                  return done(null, { token });
+                  return done(null, { token, useremail });
                 }
               );
             } else {
               // If user exists, return the user's JWT token
+              var useremail = result[0].email;
               const user = {
                 id: result[0].id,
                 name: result[0].name,
@@ -910,7 +927,7 @@ passport.use(
               const token = jwt.sign(user, process.env.JWT_SECRET, {
                 expiresIn: "1h",
               });
-              return done(null, { token });
+              return done(null, { token, useremail });
             }
           }
         );
@@ -935,9 +952,18 @@ const linkedin_callback = (req, res) => {
     if (!user) {
       return res.status(400).json({ error: "LinkedIn authentication failed" });
     }
-    res.redirect(
-      `${process.env.clientfrontend}/funccall.html?name=${user.token}`
-    );
+    var id = "";
+    const selectUserQuery = `SELECT * FROM users WHERE email = ?`;
+    conn.query(selectUserQuery, [user.useremail.value], (err, result) => {
+      if (err) {
+        console.error(err);
+        return res.status(500).json({ error: "Internal server error" });
+      }
+      id = result[0].id;
+      res.redirect(
+        `${process.env.clientfrontend}/funccall.html?name=${user.token}&id=${id}`
+      );
+    });
     // Set the JWT token as a cookie in the response
     // res.cookie("token", user.token, {
     //   httpOnly: true,
@@ -976,7 +1002,29 @@ const logout = async (req, res) => {
   }
 };
 
+const get_user = (req, res) => {
+  const userId = req.params.id;
+  // console.log(userId);
+  const query = `SELECT * FROM users WHERE id = ${userId}`;
+  try {
+    conn.query(query, (err, results) => {
+      if (err) {
+        throw err;
+      }
+      if (results.length === 0) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      delete results[0].password;
+      return res.status(200).json(results[0]);
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Internal server error" });
+  }
+};
+
 module.exports = {
+  get_user,
   new_user,
   verify_email,
   user_login,

@@ -32,6 +32,8 @@ router.post("/send-verification-code", users_controller.send_verification_code);
 router.post("/change-email", users_controller.change_email);
 // Forgot Password Route
 
+router.get("/get-user/:id", users_controller.get_user);
+
 router.post(
   "/forgot-password",
   validateForgotPassword,
