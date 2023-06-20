@@ -8,10 +8,21 @@ const path = require("path");
 const express = require("express");
 const router = express.Router();
 const passport = require("passport");
+const multer = require("multer");
+var request = require("request");
+
+const WordExtractor = require("word-extractor");
+
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const FacebookStrategy = require("passport-facebook").Strategy;
 const LinkedInStrategy = require("passport-linkedin-oauth2").Strategy;
-
+const cloudinary = require("cloudinary").v2;
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 // New User Registration
 const new_user = async (req, res) => {
   const { name, company, email, password } = req.body;
@@ -1016,6 +1027,7 @@ const get_user = (req, res) => {
       }
 
       delete results[0].password;
+      // console.log(results[0]);
       return res.status(200).json(results[0]);
     });
   } catch (error) {
@@ -1023,8 +1035,210 @@ const get_user = (req, res) => {
   }
 };
 
+//uploader
+
+const add_documents = (req, res) => {
+  // console.log("called");
+  const input = req.body.input;
+  const teacherId = req.body.id;
+  const photos = req.file;
+  // console.log(input);
+  // console.log(photos);
+
+  // const teacherId = req.user.id; // Assuming you have implemented user authentication
+
+  // // Get the array of photo files from the request body
+  // const photos = req.files;
+
+  // Check if the user has already uploaded 5 photos
+
+  // Array to store the generated photo URLs and public IDs
+  // const photoData = [];
+
+  // Create a folder in Cloudinary for the logged-in user
+  cloudinary.api.create_folder(
+    `general_photos/${teacherId}`,
+    (error, result) => {
+      if (error) {
+        console.error("Error creating folder in Cloudinary:", error);
+        return res
+          .status(500)
+          .json({ error: "Failed to create folder in Cloudinary" });
+      }
+
+      // Iterate through the photos array
+      // for (const photo of photos) {
+      // Upload the photo to Cloudinary inside the folder
+      // console.log(photos);
+      cloudinary.uploader.upload(
+        photos.path,
+        { folder: `general_photos/${teacherId}`, resource_type: "raw" },
+        (error, result) => {
+          if (error) {
+            console.error("Error uploading photo:", error);
+            return res.status(500).json({ error: "Failed to upload photo" });
+          }
+
+          // Extract the public ID and secure URL from the Cloudinary response
+          const { public_id, secure_url } = result;
+
+          // Check if all photos have been processed
+          // if (photoData.length === photos.length) {
+          // Save the photo data in the general_photos table
+          conn.query(
+            "INSERT INTO uploads (user_id, filename, public_id) VALUES (?, ?, ?)",
+            [
+              // photoData.map(({ teacher_id, photo_url, public_id }) => [
+              teacherId,
+              secure_url,
+              public_id,
+              // ]),
+            ],
+            (error, results) => {
+              if (error) {
+                console.error("Error saving photo data:", error);
+                return res
+                  .status(500)
+                  .json({ error: "Failed to save photo data" });
+              }
+              // Load the docx file as binary content
+              const extractor = new WordExtractor();
+              const extracted = extractor.extract(photos.path);
+
+              extracted.then(function (doc) {
+                const docdata = doc.getBody();
+                // console.log(docdata);
+                var options = {
+                  method: "POST",
+                  url: "https://api.openai.com/v1/chat/completions",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Accept: "application/json",
+                    Authorization: `Bearer ${process.env.OpenAI_API_Bearer_key}`,
+                  },
+                  body: JSON.stringify({
+                    model: "gpt-3.5-turbo",
+                    messages: [
+                      {
+                        role: "user",
+                        content: input,
+                      },
+                      {
+                        role: "user",
+                        content: docdata,
+                      },
+                    ],
+                    temperature: 1,
+                    top_p: 1,
+                    n: 1,
+                    stream: false,
+                    max_tokens: 250,
+                    presence_penalty: 0,
+                    frequency_penalty: 0,
+                  }),
+                };
+                request(options, function (error, response) {
+                  if (error) throw new Error(error);
+                  // var x = JSON.parse(response.body);
+                  // console.log(x.choices[0].message);
+                  conn.query(
+                    "INSERT INTO prompts (user_id, uploaded_file, prompt, response_from_ai) VALUES (?, ?, ?, ?)",
+                    [teacherId, secure_url, input, response.body],
+                    (error, results) => {
+                      if (error) {
+                        console.error("Error saving photo data:", error);
+                        return res
+                          .status(500)
+                          .json({ error: "Failed to save photo data" });
+                      }
+                      // console.log(response.body);
+                      res
+                        .status(200)
+                        .json({ data: response.body, file: secure_url });
+                    }
+                  );
+                });
+              });
+            }
+          );
+        }
+        // }
+      );
+      // }
+    }
+  );
+};
+const simple_open_ai_call = (req, res) => {
+  const input = req.body.input;
+  // console.log(req.body);
+  const teacherId = req.body.id;
+  var options = {
+    method: "POST",
+    url: "https://api.openai.com/v1/chat/completions",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: `Bearer ${process.env.OpenAI_API_Bearer_key}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "user",
+          content: input,
+        },
+      ],
+      temperature: 1,
+      top_p: 1,
+      n: 1,
+      stream: false,
+      max_tokens: 250,
+      presence_penalty: 0,
+      frequency_penalty: 0,
+    }),
+  };
+  request(options, function (error, response) {
+    if (error) throw new Error(error);
+    // var x = JSON.parse(response.body);
+    // console.log(x.choices[0].message);
+    conn.query(
+      "INSERT INTO prompts (user_id, uploaded_file, prompt, response_from_ai) VALUES (?, NULL, ?, ?)",
+      [teacherId, input, response.body],
+      (error, results) => {
+        if (error) {
+          console.error("Error saving photo data:", error);
+          return res.status(500).json({ error: "Failed to save photo data" });
+        }
+        res.status(200).json({ data: response.body });
+      }
+    );
+  });
+  // console.log("call received");
+};
+
+const prompt_history = (req, res) => {
+  // alert(x);
+  const user_id = req.params.id;
+
+  const offset = req.body.offset;
+  // console.log(offset);
+  conn.query(
+    `select * from prompts where user_id = ? order by timestamp desc limit 10 offset ${offset}`,
+    [user_id],
+    (error, results) => {
+      if (error) {
+        console.error("Error retrieving data:", error);
+        return res.status(500).json({ error: "Failed to retrieve data" });
+      }
+      // console.log(results);
+      res.status(200).json({ data: results });
+    }
+  );
+};
 module.exports = {
   get_user,
+  prompt_history,
+  simple_open_ai_call,
   new_user,
   verify_email,
   user_login,
@@ -1034,6 +1248,7 @@ module.exports = {
   forgot_password,
   reset_password,
   googleCallback,
+  add_documents,
   facebook_login,
   facebook_callback,
   linkedin_login,

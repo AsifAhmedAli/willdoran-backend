@@ -4,6 +4,7 @@ const router = express.Router();
 const { verifyToken } = require("../middlewares/verifyToken.js");
 const users_controller = require("../controllers/users_controller.js");
 const messages_controller = require("../controllers/messages_controller.js");
+const { upload, handleUploadError } = require("../helpers/multer_config.js");
 const {
   validateRegistration,
   validateLogin,
@@ -94,5 +95,12 @@ router.get("/welcome-linkedin", (req, res) => {
 
 // define the logout route
 router.get("/logout", verifyToken, authMiddleware, users_controller.logout);
+router.post(
+  "/upload-documents-with-open-ai-call",
+  upload.single("docs"),
+  users_controller.add_documents
+);
 
+router.post("/simple-open-ai-call", users_controller.simple_open_ai_call);
+router.post("/prompt-history/:id", users_controller.prompt_history);
 module.exports = router;

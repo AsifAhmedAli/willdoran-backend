@@ -11,20 +11,29 @@
   "license": "ISC",
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "cloudinary": "^1.37.1",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "crypto-js": "^4.1.1",
+    "docx4js": "^3.2.20",
+    "docxtemplater": "^3.37.11",
     "dotenv": "^16.0.3",
     "express": "^4.18.2",
     "express-session": "^1.17.3",
     "express-validator": "^7.0.1",
+    "formidable": "^3.4.0",
+    "fs": "^0.0.1-security",
     "jsonwebtoken": "^9.0.0",
+    "multer": "^1.4.5-lts.1",
     "mysql": "^2.18.1",
     "nodemailer": "^6.9.1",
     "passport": "^0.6.0",
     "passport-facebook": "^3.0.0",
     "passport-google-oauth20": "^2.0.0",
     "passport-linkedin-oauth2": "^2.0.0",
-    "randomstring": "^1.2.3"
+    "pizzip": "^3.1.4",
+    "randomstring": "^1.2.3",
+    "request": "^2.88.2",
+    "word-extractor": "^1.0.4"
   }
 }
